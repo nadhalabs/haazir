@@ -1,4 +1,4 @@
-package com.haazir.haazir_customer
+package com.nadhalabs.haazir
 
 import io.flutter.embedding.android.FlutterActivity
 

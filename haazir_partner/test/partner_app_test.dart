@@ -61,6 +61,11 @@ void main() {
         find.widgetWithText(ElevatedButton, 'Enter Dashboard'),
         findsOneWidget,
       );
+      for (final field in tester.widgetList<EditableText>(
+        find.byType(EditableText),
+      )) {
+        expect(field.controller.text, isEmpty);
+      }
     },
   );
 }

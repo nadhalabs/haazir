@@ -11,8 +11,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController(text: '+919876543210');
-  final _passwordController = TextEditingController(text: 'StrongPassword123!');
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
 
@@ -140,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
               Text(
                 _isSignUp
-                    ? 'Join millions getting verified local services reliably'
+                    ? 'Create an account to request trusted local services'
                     : 'Enter your phone number to access your bookings',
                 style: const TextStyle(
                   fontSize: 15,
@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
-                    hintText: 'e.g. Rahul Sharma',
+                    hintText: 'Your full name',
                     prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
                 ),
@@ -206,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    hintText: 'rahul@example.com',
+                    hintText: 'you@example.com',
                     prefixIcon: Icon(Icons.mail_outline_rounded),
                   ),
                 ),

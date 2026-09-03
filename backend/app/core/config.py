@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -34,9 +34,12 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]
+    CORS_ORIGINS: Optional[List[str]] = None
 
     @model_validator(mode="after")
     def validate_production_safety(self):
+        if self.CORS_ORIGINS is not None:
+            self.BACKEND_CORS_ORIGINS = self.CORS_ORIGINS
         if self.ENVIRONMENT.lower() == "production":
             if "change-in-production" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
                 raise ValueError("Production requires a strong SECRET_KEY")

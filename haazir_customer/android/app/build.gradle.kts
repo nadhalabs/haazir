@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,8 +7,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doFirst {
+        val definitions = project.findProperty("dart-defines")?.toString().orEmpty()
+            .split(",")
+            .filter { it.isNotBlank() }
+            .map { String(Base64.getDecoder().decode(it)) }
+        val apiUrl = definitions.firstOrNull { it.startsWith("HAAZIR_API_URL=") }
+            ?.substringAfter("=")
+        check(apiUrl?.startsWith("https://") == true) {
+            "Release requires --dart-define=HAAZIR_API_URL=https://.../api/v1"
+        }
+    }
+}
+
 android {
-    namespace = "com.haazir.haazir_customer"
+    namespace = "com.nadhalabs.haazir"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +36,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.haazir.haazir_customer"
+        applicationId = "com.nadhalabs.haazir"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -32,8 +47,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Local verification only. Configure an upload keystore in CI before store distribution.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

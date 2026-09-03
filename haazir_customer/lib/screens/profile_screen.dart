@@ -201,16 +201,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          trailing: const Icon(Icons.chevron_right_rounded),
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Support helpline: 1800-HAAZIR-HELP (24x7)',
-                                ),
-                              ),
-                            );
-                          },
+                          subtitle: const Text(
+                            'Raise a support case from the relevant booking.',
+                          ),
                         ),
                         const Divider(height: 1),
                         ListTile(

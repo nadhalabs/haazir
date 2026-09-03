@@ -10,7 +10,7 @@ class PartnerApiService {
   factory PartnerApiService() => _instance;
   PartnerApiService._internal();
 
-  String _baseUrl = AppConstants.defaultBaseUrl;
+  final String _baseUrl = AppConstants.defaultBaseUrl;
   String? _accessToken;
   ProviderUser? _currentUser;
   ProviderProfile? _currentProfile;
@@ -20,10 +20,6 @@ class PartnerApiService {
   ProviderUser? get currentUser => _currentUser;
   ProviderProfile? get currentProfile => _currentProfile;
   bool get isAuthenticated => _accessToken != null;
-
-  void setBaseUrl(String url) {
-    _baseUrl = url;
-  }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

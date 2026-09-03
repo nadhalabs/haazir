@@ -10,7 +10,7 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  String _baseUrl = AppConstants.defaultBaseUrl;
+  final String _baseUrl = AppConstants.defaultBaseUrl;
   String? _accessToken;
   User? _currentUser;
   static const _secureStorage = FlutterSecureStorage();
@@ -18,10 +18,6 @@ class ApiService {
   String get baseUrl => _baseUrl;
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _accessToken != null;
-
-  void setBaseUrl(String url) {
-    _baseUrl = url;
-  }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

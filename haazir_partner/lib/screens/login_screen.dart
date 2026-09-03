@@ -11,8 +11,8 @@ class PartnerLoginScreen extends StatefulWidget {
 }
 
 class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
-  final _phoneController = TextEditingController(text: '+919999900003');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
 
   bool _isSignUp = false;
@@ -136,7 +136,7 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
               const SizedBox(height: 8),
               Text(
                 _isSignUp
-                    ? 'Start earning reliably with daily direct payouts'
+                    ? 'Create your profile for verification and service requests'
                     : 'Sign in to access incoming service requests and live dispatch',
                 style: const TextStyle(
                   fontSize: 14,
@@ -188,7 +188,7 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
-                    hintText: 'e.g. Ramesh Plumbing Works',
+                    hintText: 'Your name or registered business',
                     prefixIcon: Icon(Icons.badge_outlined),
                   ),
                 ),

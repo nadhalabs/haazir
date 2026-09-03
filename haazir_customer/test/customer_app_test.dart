@@ -62,6 +62,11 @@ void main() {
       expect(find.text('Phone Number'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
       expect(find.widgetWithText(ElevatedButton, 'Continue'), findsOneWidget);
+      for (final field in tester.widgetList<EditableText>(
+        find.byType(EditableText),
+      )) {
+        expect(field.controller.text, isEmpty);
+      }
     },
   );
 }
