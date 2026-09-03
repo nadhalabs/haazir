@@ -46,26 +46,13 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
     setState(() => _isLoading = true);
     try {
       final addresses = await ApiService().getAddresses();
-      if (addresses.isEmpty) {
-        // Create default address if none exists
-        final newAddr = await ApiService().createAddress(
-          label: 'Home',
-          addressLine1: 'Flat 402, Green Glen Layout, Bellandur',
-          city: 'Bengaluru',
-          state: 'Karnataka',
-          postalCode: '560103',
-          latitude: 12.9279,
-          longitude: 77.6771,
-          isDefault: true,
+      _addresses = addresses;
+      if (_addresses.isNotEmpty) {
+        _selectedAddress = _addresses.firstWhere(
+          (a) => a.isDefault,
+          orElse: () => _addresses.first,
         );
-        _addresses = [newAddr];
-      } else {
-        _addresses = addresses;
       }
-      _selectedAddress = _addresses.firstWhere(
-        (a) => a.isDefault,
-        orElse: () => _addresses.first,
-      );
 
       // Fetch server authoritative quote
       await _fetchQuote();
@@ -75,6 +62,120 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addAddress() async {
+    final label = TextEditingController(text: 'Home');
+    final line1 = TextEditingController();
+    final city = TextEditingController();
+    final state = TextEditingController();
+    final postal = TextEditingController();
+    final latitude = TextEditingController();
+    final longitude = TextEditingController();
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add service address'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: label,
+                decoration: const InputDecoration(labelText: 'Label'),
+              ),
+              TextField(
+                controller: line1,
+                decoration: const InputDecoration(labelText: 'Address line'),
+              ),
+              TextField(
+                controller: city,
+                decoration: const InputDecoration(labelText: 'City'),
+              ),
+              TextField(
+                controller: state,
+                decoration: const InputDecoration(labelText: 'State'),
+              ),
+              TextField(
+                controller: postal,
+                decoration: const InputDecoration(labelText: 'Postal code'),
+              ),
+              TextField(
+                controller: latitude,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Latitude'),
+              ),
+              TextField(
+                controller: longitude,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Longitude'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (save != true) {
+      return;
+    }
+    final lat = double.tryParse(latitude.text.trim());
+    final lon = double.tryParse(longitude.text.trim());
+    if (line1.text.trim().isEmpty ||
+        city.text.trim().isEmpty ||
+        state.text.trim().isEmpty ||
+        postal.text.trim().isEmpty ||
+        lat == null ||
+        lon == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Enter the complete address and valid map coordinates.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      final address = await ApiService().createAddress(
+        label: label.text.trim(),
+        addressLine1: line1.text.trim(),
+        city: city.text.trim(),
+        state: state.text.trim(),
+        postalCode: postal.text.trim(),
+        latitude: lat,
+        longitude: lon,
+      );
+      if (mounted) {
+        setState(() {
+          _addresses = [..._addresses, address];
+          _selectedAddress = address;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save address: $e')));
+      }
     }
   }
 
@@ -181,47 +282,66 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: HaazirTheme.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.build_rounded,
-                              color: HaazirTheme.primary,
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      child: _selectedAddress == null
+                          ? Column(
                               children: [
-                                Text(
-                                  widget.service.name,
-                                  style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    color: HaazirTheme.textPrimary,
+                                const Text(
+                                  'No address saved. Add the real service location before booking.',
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: _addAddress,
+                                  icon: const Icon(
+                                    Icons.add_location_alt_outlined,
+                                  ),
+                                  label: const Text('Add address'),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    color: HaazirTheme.primary.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.build_rounded,
+                                    color: HaazirTheme.primary,
+                                    size: 28,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Est. ${widget.service.estimatedDurationMins} mins duration',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: HaazirTheme.textSecondary,
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.service.name,
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700,
+                                          color: HaazirTheme.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Est. ${widget.service.estimatedDurationMins} mins duration',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: HaazirTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -390,7 +510,12 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
 
                   // Confirm and Request Button
                   ElevatedButton(
-                    onPressed: _isRequesting ? null : _confirmAndBook,
+                    onPressed:
+                        _isRequesting ||
+                            _selectedAddress == null ||
+                            _quote == null
+                        ? null
+                        : _confirmAndBook,
                     child: _isRequesting
                         ? const SizedBox(
                             width: 22,
@@ -407,7 +532,7 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
                   const SizedBox(height: 12),
                   const Center(
                     child: Text(
-                      'Pay cash or UPI directly upon job completion',
+                      'Cash payment is collected by the assigned provider after completion',
                       style: TextStyle(
                         fontSize: 12,
                         color: HaazirTheme.textMuted,

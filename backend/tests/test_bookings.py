@@ -1,4 +1,7 @@
 from fastapi import status
+from app.models import BookingAssignment
+from app.models.enums import AssignmentStatus
+import uuid
 
 
 def _create_address_and_quote(client, customer_headers, service_id):
@@ -29,7 +32,7 @@ def _create_address_and_quote(client, customer_headers, service_id):
     return address_id, quote_id
 
 
-def test_booking_creation_and_lifecycle(client, test_customer, test_provider, test_sample_service):
+def test_booking_creation_and_lifecycle(client, db_session, test_customer, test_provider, test_sample_service):
     address_id, quote_id = _create_address_and_quote(client, test_customer["headers"], test_sample_service.id)
 
     # 1. Customer creates booking
@@ -45,6 +48,9 @@ def test_booking_creation_and_lifecycle(client, test_customer, test_provider, te
     assert booking["status"] == "REQUESTED"
     assert booking["address_snapshot"]["address_line1"] == "100 MG Road"
     booking_id = booking["id"]
+
+    db_session.add(BookingAssignment(booking_id=uuid.UUID(booking_id), provider_id=test_provider["profile"].id, status=AssignmentStatus.OFFERED))
+    db_session.commit()
 
     # 2. Cannot reuse same quote
     dup_res = client.post("/api/v1/bookings", json=booking_payload, headers=test_customer["headers"])

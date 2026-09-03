@@ -7,7 +7,7 @@ from app.models.provider import ProviderProfile, ProviderDocument
 from app.models.service import ProviderService
 from app.models.service import Service
 from app.models.user import User
-from app.models.enums import UserRole, ProviderPresenceStatus
+from app.models.enums import UserRole, ProviderPresenceStatus, VerificationStatus
 from app.schemas.provider import (
     ProviderProfileResponse,
     ProviderProfileUpdate,
@@ -52,6 +52,8 @@ def update_my_availability(
     profile: ProviderProfile = Depends(get_current_provider_profile),
     db: Session = Depends(get_db)
 ):
+    if profile.verification_status != VerificationStatus.VERIFIED:
+        raise ForbiddenException("Provider must be verified before going online")
     if data.is_online is not None:
         profile.is_online = data.is_online
     if data.is_available is not None:
@@ -154,6 +156,8 @@ def update_provider_location(
     """
     if not (-90.0 <= data.latitude <= 90.0 and -180.0 <= data.longitude <= 180.0):
         raise BadRequestException("Invalid latitude or longitude coordinates")
+    if profile.verification_status != VerificationStatus.VERIFIED:
+        raise ForbiddenException("Provider must be verified before publishing live presence")
 
     from app.core.redis import redis_service
     redis_service.update_provider_location(

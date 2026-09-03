@@ -174,6 +174,13 @@ def _create_searching_booking(db, setup):
         service_snapshot={"name": setup["service"].name, "base_charge": 300.0}
     )
     db.add(booking)
+    db.flush()
+    for provider_key in ("provider1_profile", "provider2_profile"):
+        db.add(BookingAssignment(
+            booking_id=booking.id,
+            provider_id=setup[provider_key].id,
+            status=AssignmentStatus.OFFERED,
+        ))
     db.commit()
     db.refresh(booking)
     return booking

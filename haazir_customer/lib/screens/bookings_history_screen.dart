@@ -201,8 +201,9 @@ class _BookingsHistoryScreenState extends State<BookingsHistoryScreen> {
   Widget _statusBadge(String status) {
     Color color = HaazirTheme.primary;
     if (status == 'COMPLETED') color = HaazirTheme.success;
-    if (status == 'CANCELLED' || status == 'FAILED')
+    if (status == 'CANCELLED' || status == 'FAILED') {
       color = HaazirTheme.urgentRed;
+    }
     if (status == 'IN_PROGRESS') color = HaazirTheme.secondary;
 
     return Container(

@@ -1,7 +1,10 @@
 from fastapi import status
+from app.models import BookingAssignment
+from app.models.enums import AssignmentStatus
+import uuid
 
 
-def _setup_completed_booking(client, customer, provider, service):
+def _setup_completed_booking(client, db_session, customer, provider, service):
     # Setup Address & Quote
     addr_res = client.post(
         "/api/v1/users/addresses",
@@ -37,6 +40,9 @@ def _setup_completed_booking(client, customer, provider, service):
     )
     booking_id = booking_res.json()["id"]
 
+    db_session.add(BookingAssignment(booking_id=uuid.UUID(booking_id), provider_id=provider["profile"].id, status=AssignmentStatus.OFFERED))
+    db_session.commit()
+
     # Assign & Progress
     client.post(f"/api/v1/bookings/{booking_id}/accept", headers=provider["headers"])
     client.post(f"/api/v1/bookings/{booking_id}/status", json={"to_status": "PROVIDER_EN_ROUTE"}, headers=provider["headers"])
@@ -47,8 +53,8 @@ def _setup_completed_booking(client, customer, provider, service):
     return booking_id
 
 
-def test_payment_and_earning_flow(client, test_customer, test_provider, test_sample_service):
-    booking_id = _setup_completed_booking(client, test_customer, test_provider, test_sample_service)
+def test_payment_and_earning_flow(client, db_session, test_customer, test_provider, test_sample_service):
+    booking_id = _setup_completed_booking(client, db_session, test_customer, test_provider, test_sample_service)
 
     # 1. Customer initiates Cash payment
     pay_res = client.post(
@@ -83,8 +89,8 @@ def test_payment_and_earning_flow(client, test_customer, test_provider, test_sam
     assert earning["payout_status"] == "PENDING"
 
 
-def test_submit_rating_after_completion(client, test_customer, test_provider, test_sample_service):
-    booking_id = _setup_completed_booking(client, test_customer, test_provider, test_sample_service)
+def test_submit_rating_after_completion(client, db_session, test_customer, test_provider, test_sample_service):
+    booking_id = _setup_completed_booking(client, db_session, test_customer, test_provider, test_sample_service)
 
     # Customer rates provider 5 stars
     rating_payload = {

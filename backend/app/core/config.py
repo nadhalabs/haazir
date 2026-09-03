@@ -1,9 +1,10 @@
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    ENVIRONMENT: str = "development"
     PROJECT_NAME: str = "Haazir API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
@@ -33,6 +34,17 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]
+
+    @model_validator(mode="after")
+    def validate_production_safety(self):
+        if self.ENVIRONMENT.lower() == "production":
+            if "change-in-production" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                raise ValueError("Production requires a strong SECRET_KEY")
+            if "localhost" in self.DATABASE_URL or "localhost" in self.REDIS_URL:
+                raise ValueError("Production database and Redis URLs must be configured")
+            if "*" in self.BACKEND_CORS_ORIGINS:
+                raise ValueError("Production CORS origins must be explicit")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

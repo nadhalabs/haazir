@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../core/theme.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -33,10 +34,20 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
       (_) => _pollOffersAndStats(),
     );
     // Send live provider location heartbeat every 20 seconds while online
-    _locationTimer = Timer.periodic(
-      const Duration(seconds: 20),
-      (_) => _sendHeartbeatIfOnline(),
-    );
+    _locationTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+      if (!_isOnline) {
+        return;
+      }
+      try {
+        await _sendHeartbeatIfOnline();
+      } catch (e) {
+        if (mounted) {
+          setState(
+            () => _errorMessage = e.toString().replaceAll('Exception: ', ''),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -84,14 +95,25 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
 
   Future<void> _sendHeartbeatIfOnline() async {
     if (!_isOnline) return;
-    try {
-      // Simulate live device GPS coordinates for provider
-      await PartnerApiService().sendLocationHeartbeat(
-        latitude: 12.9716,
-        longitude: 77.5946,
-        presenceStatus: 'ONLINE_AVAILABLE',
-      );
-    } catch (_) {}
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception('Location permission is required to go online');
+    }
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('Turn on device location to go online');
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    await PartnerApiService().sendLocationHeartbeat(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      presenceStatus: 'ONLINE_AVAILABLE',
+    );
   }
 
   Future<void> _toggleOnlineStatus(bool value) async {

@@ -85,18 +85,9 @@ class DispatchService:
                 p_lon = live_presence.get("longitude")
                 service_radius = live_presence.get("service_radius_km", provider.service_radius_km)
             else:
-                # If Redis is unavailable or mock, fallback to PostgreSQL durable location ONLY IF online & available in DB
-                if not redis_service.is_connected():
-                    if not (provider.is_online and provider.is_available):
-                        continue
-                    if provider.base_latitude is None or provider.base_longitude is None:
-                        continue
-                    p_lat = provider.base_latitude
-                    p_lon = provider.base_longitude
-                    service_radius = provider.service_radius_km
-                else:
-                    # In normal operation with active Redis, absence of live presence key means provider is stale/offline
-                    continue
+                # Live Redis presence is authoritative. During an outage dispatch pauses;
+                # durable DB flags/coordinates must never masquerade as fresh presence.
+                continue
 
             # Calculate distance
             dist_km = cls.haversine_distance_km(latitude, longitude, p_lat, p_lon)

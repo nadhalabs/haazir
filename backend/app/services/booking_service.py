@@ -73,6 +73,10 @@ class BookingService:
         service = db.query(Service).filter(Service.id == service_id).first()
         if not service:
             raise NotFoundException("Service not found")
+        if quote.service_id != service.id:
+            raise BadRequestException("Quote does not match the requested service")
+        if not service.is_active:
+            raise BadRequestException("Service is not currently available")
 
         # Snapshot address and service at booking time
         address_snapshot = {
@@ -235,6 +239,16 @@ class BookingService:
         # Provider check
         if not provider.user.is_active or provider.user.is_suspended:
             raise ForbiddenException("Provider account is inactive or suspended")
+        if provider.verification_status.value != "VERIFIED":
+            raise ForbiddenException("Provider is not verified")
+
+        offered = db.query(BookingAssignment).filter(
+            BookingAssignment.booking_id == locked_booking.id,
+            BookingAssignment.provider_id == provider.id,
+            BookingAssignment.status == AssignmentStatus.OFFERED,
+        ).first()
+        if not offered:
+            raise ForbiddenException("No active dispatch offer exists for this provider")
 
         # Check if an assignment record already exists for this provider
         assignment = (
@@ -250,15 +264,7 @@ class BookingService:
         from_status = locked_booking.status
 
         try:
-            if assignment:
-                assignment.status = AssignmentStatus.ACCEPTED
-            else:
-                assignment = BookingAssignment(
-                    booking_id=locked_booking.id,
-                    provider_id=provider.id,
-                    status=AssignmentStatus.ACCEPTED
-                )
-                db.add(assignment)
+            assignment.status = AssignmentStatus.ACCEPTED
 
             # Assign provider to booking
             locked_booking.provider_id = provider.id

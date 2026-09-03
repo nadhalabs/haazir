@@ -1,4 +1,6 @@
 from fastapi import status
+from starlette.websockets import WebSocketDisconnect
+import pytest
 
 
 def test_customer_cannot_access_admin_endpoints(client, test_customer):
@@ -15,6 +17,27 @@ def test_admin_can_access_admin_endpoints(client, test_admin):
     res = client.get("/api/v1/admin/users", headers=test_admin["headers"])
     assert res.status_code == status.HTTP_200_OK
     assert isinstance(res.json(), list)
+
+
+def test_provider_websocket_rejects_missing_or_wrong_identity(client, test_customer, test_provider):
+    provider_id = test_provider["profile"].id
+    with pytest.raises(WebSocketDisconnect) as missing:
+        with client.websocket_connect(f"/api/v1/ws/providers/{provider_id}"):
+            pass
+    assert missing.value.code == 1008
+
+    with pytest.raises(WebSocketDisconnect) as wrong_user:
+        with client.websocket_connect(
+            f"/api/v1/ws/providers/{provider_id}?token={test_customer['token']}"
+        ):
+            pass
+    assert wrong_user.value.code == 1008
+
+    with client.websocket_connect(
+        f"/api/v1/ws/providers/{provider_id}?token={test_provider['token']}"
+    ) as websocket:
+        websocket.send_text("ping")
+        assert websocket.receive_json()["event"] == "pong"
 
 
 def test_idor_address_protection(client, test_customer, test_customer_2):

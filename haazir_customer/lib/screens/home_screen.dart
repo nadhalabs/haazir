@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = true;
   String? _errorMessage;
-  final String _currentCity = 'Bellandur, Bengaluru';
+  final String _currentCity = 'Choose a genuine service address at checkout';
 
   @override
   void initState() {

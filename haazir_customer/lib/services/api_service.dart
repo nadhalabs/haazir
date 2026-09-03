@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants.dart';
 import '../models/models.dart';
 
@@ -12,6 +13,7 @@ class ApiService {
   String _baseUrl = AppConstants.defaultBaseUrl;
   String? _accessToken;
   User? _currentUser;
+  static const _secureStorage = FlutterSecureStorage();
 
   String get baseUrl => _baseUrl;
   User? get currentUser => _currentUser;
@@ -23,7 +25,7 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _accessToken = prefs.getString('access_token');
+    _accessToken = await _secureStorage.read(key: 'access_token');
     final userJson = prefs.getString('current_user');
     if (userJson != null) {
       try {
@@ -83,7 +85,7 @@ class ApiService {
       final data = jsonDecode(res.body);
       _accessToken = data['access_token'];
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('access_token', _accessToken!);
+      await _secureStorage.write(key: 'access_token', value: _accessToken!);
 
       // Fetch profile
       final user = await getProfile();
@@ -123,7 +125,7 @@ class ApiService {
     _accessToken = null;
     _currentUser = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
+    await _secureStorage.delete(key: 'access_token');
     await prefs.remove('current_user');
   }
 
