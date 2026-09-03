@@ -184,3 +184,123 @@ def update_provider_location(
         "latitude": data.latitude,
         "longitude": data.longitude
     }
+
+@router.get("/me/incoming-offers")
+def get_incoming_offers(
+    profile: ProviderProfile = Depends(get_current_provider_profile),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns pending OFFERED assignments for the authenticated provider
+    along with job and customer area details.
+    """
+    from app.models.booking import BookingAssignment, Booking
+    from app.models.enums import AssignmentStatus, BookingStatus
+    from app.services.adapters.routing_adapter import BasicRoutingAdapter
+
+    assignments = (
+        db.query(BookingAssignment)
+        .join(Booking, Booking.id == BookingAssignment.booking_id)
+        .filter(
+            BookingAssignment.provider_id == profile.id,
+            BookingAssignment.status == AssignmentStatus.OFFERED,
+            Booking.status == BookingStatus.SEARCHING
+        )
+        .all()
+    )
+
+    routing = BasicRoutingAdapter()
+    results = []
+    for a in assignments:
+        b = a.booking
+        addr = b.address_snapshot or {}
+        cust_lat = float(addr.get("latitude", 0.0))
+        cust_lon = float(addr.get("longitude", 0.0))
+
+        dist_km = 0.0
+        approx_mins = 15
+        if profile.base_latitude and profile.base_longitude and cust_lat and cust_lon:
+            eta = routing.calculate_eta(profile.base_latitude, profile.base_longitude, cust_lat, cust_lon)
+            dist_km = eta["distance_km"]
+            approx_mins = eta["estimated_duration_minutes"]
+
+        # Provider gross quote / estimated earning (85% net of 15% platform commission)
+        total_quote = b.price_quote.total_amount if b.price_quote else 0.0
+        estimated_net = round(total_quote * 0.85, 2)
+
+        results.append({
+            "assignment_id": str(a.id),
+            "booking_id": str(b.id),
+            "booking_number": b.booking_number,
+            "service_name": b.service_snapshot.get("name", "Service"),
+            "customer_notes": b.customer_notes,
+            "area": f"{addr.get('city', '')}, {addr.get('state', '')}",
+            "address_line1": addr.get("address_line1", ""),
+            "distance_km": dist_km,
+            "estimated_duration_minutes": approx_mins,
+            "total_amount": total_quote,
+            "estimated_net_earning": estimated_net,
+            "created_at": a.created_at.isoformat()
+        })
+
+    return results
+
+
+@router.get("/me/dashboard-stats")
+def get_provider_dashboard_stats(
+    profile: ProviderProfile = Depends(get_current_provider_profile),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns today's earnings, completed jobs, active job, and presence status.
+    """
+    from app.models.booking import Booking
+    from app.models.payment import ProviderEarning
+    from app.models.enums import BookingStatus
+    from datetime import datetime, timezone
+
+    # Active job (ASSIGNED, PROVIDER_EN_ROUTE, ARRIVED, IN_PROGRESS)
+    active_booking = (
+        db.query(Booking)
+        .filter(
+            Booking.provider_id == profile.id,
+            Booking.status.in_([
+                BookingStatus.ASSIGNED,
+                BookingStatus.PROVIDER_EN_ROUTE,
+                BookingStatus.ARRIVED,
+                BookingStatus.IN_PROGRESS
+            ])
+        )
+        .order_by(Booking.created_at.desc())
+        .first()
+    )
+
+    # Today's earnings
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    today_earnings = (
+        db.query(ProviderEarning)
+        .filter(
+            ProviderEarning.provider_id == profile.id,
+            ProviderEarning.created_at >= today_start
+        )
+        .all()
+    )
+
+    today_net = sum(e.provider_earning for e in today_earnings)
+    today_gross = sum(e.gross_amount for e in today_earnings)
+    today_completed_count = len(today_earnings)
+
+    return {
+        "is_online": profile.is_online,
+        "is_available": profile.is_available,
+        "rating_average": profile.rating_average,
+        "rating_count": profile.rating_count,
+        "total_completed_jobs": profile.completed_jobs_count,
+        "today_completed_jobs": today_completed_count,
+        "today_net_earnings": round(today_net, 2),
+        "today_gross_earnings": round(today_gross, 2),
+        "active_booking_id": str(active_booking.id) if active_booking else None,
+        "active_booking_status": active_booking.status.value if active_booking else None
+    }
