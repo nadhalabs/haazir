@@ -53,6 +53,8 @@ def confirm_payment_completion(
         raise NotFoundException("Payment record not found")
 
     booking = payment.booking
+    if booking.status != BookingStatus.COMPLETED:
+        raise BadRequestException("Payment can only be confirmed after the job is completed")
     # Ensure only assigned provider or admin can confirm cash payment
     if current_user.role == UserRole.PROVIDER:
         if not booking.provider or booking.provider.user_id != current_user.id:

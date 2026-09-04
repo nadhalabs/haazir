@@ -47,6 +47,8 @@ def test_booking_creation_and_lifecycle(client, db_session, test_customer, test_
     booking = booking_res.json()
     assert booking["status"] == "REQUESTED"
     assert booking["address_snapshot"]["address_line1"] == "100 MG Road"
+    assert booking["payment"]["payment_method"] == "CASH"
+    assert booking["payment"]["status"] == "PENDING"
     booking_id = booking["id"]
 
     db_session.add(BookingAssignment(booking_id=uuid.UUID(booking_id), provider_id=test_provider["profile"].id, status=AssignmentStatus.OFFERED))

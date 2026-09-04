@@ -60,7 +60,8 @@ cd backend
 # Run database migrations
 alembic upgrade head
 
-# Seed initial V1 categories, services, and default admin
+# Seed initial V1 categories and services. Admin bootstrap is opt-in via
+# HAAZIR_BOOTSTRAP_ADMIN_PHONE/PASSWORD and should be provisioned securely.
 python -m app.seed
 ```
 

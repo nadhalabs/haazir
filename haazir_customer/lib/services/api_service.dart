@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants.dart';
+import '../core/api_response.dart';
 import '../models/models.dart';
 
 class ApiService {
@@ -41,6 +42,23 @@ class ApiService {
     return headers;
   }
 
+  Future<http.Response> _get(Uri uri, {required Map<String, String> headers}) =>
+      apiRequest(http.get(uri, headers: headers));
+
+  Future<http.Response> _post(
+    Uri uri, {
+    required Map<String, String> headers,
+    Object? body,
+  }) => apiRequest(http.post(uri, headers: headers, body: body));
+
+  dynamic _decode(http.Response response) =>
+      decodeApiResponse(response, successStatuses: const {200, 201, 204});
+
+  Never _fail(http.Response response) {
+    decodeApiResponse(response, successStatuses: const {});
+    throw const ApiException('Something went wrong. Please try again.');
+  }
+
   // --- AUTHENTICATION ---
 
   Future<User> register({
@@ -49,7 +67,7 @@ class ApiService {
     required String fullName,
     String? email,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/auth/register'),
       headers: _headers(requiresAuth: false),
       body: jsonEncode({
@@ -65,20 +83,19 @@ class ApiService {
       // Auto login
       return await login(phone: phone, password: password);
     } else {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Registration failed');
+      _fail(res);
     }
   }
 
   Future<User> login({required String phone, required String password}) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/auth/login'),
       headers: _headers(requiresAuth: false),
       body: jsonEncode({'phone': phone, 'password': password}),
     );
 
     if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+      final data = _decode(res);
       _accessToken = data['access_token'];
       final prefs = await SharedPreferences.getInstance();
       await _secureStorage.write(key: 'access_token', value: _accessToken!);
@@ -100,20 +117,16 @@ class ApiService {
       );
       return user;
     } else {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Login failed');
+      _fail(res);
     }
   }
 
   Future<User> getProfile() async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl/auth/me'),
-      headers: _headers(),
-    );
+    final res = await _get(Uri.parse('$_baseUrl/auth/me'), headers: _headers());
     if (res.statusCode == 200) {
-      return User.fromJson(jsonDecode(res.body));
+      return User.fromJson(_decode(res));
     } else {
-      throw Exception('Failed to load user profile');
+      _fail(res);
     }
   }
 
@@ -128,15 +141,15 @@ class ApiService {
   // --- SERVICES & CATEGORIES ---
 
   Future<List<ServiceCategory>> getCategories() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/services/categories'),
       headers: _headers(requiresAuth: false),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => ServiceCategory.fromJson(e)).toList();
     }
-    throw Exception('Failed to fetch service categories');
+    _fail(res);
   }
 
   Future<List<ServiceItem>> getServices({String? categoryId}) async {
@@ -144,29 +157,29 @@ class ApiService {
     if (categoryId != null) {
       url += '?category_id=$categoryId';
     }
-    final res = await http.get(
+    final res = await _get(
       Uri.parse(url),
       headers: _headers(requiresAuth: false),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => ServiceItem.fromJson(e)).toList();
     }
-    throw Exception('Failed to fetch services');
+    _fail(res);
   }
 
   // --- ADDRESSES ---
 
   Future<List<Address>> getAddresses() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/users/addresses'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => Address.fromJson(e)).toList();
     }
-    throw Exception('Failed to fetch addresses');
+    _fail(res);
   }
 
   Future<Address> createAddress({
@@ -180,7 +193,7 @@ class ApiService {
     required double longitude,
     bool isDefault = true,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/users/addresses'),
       headers: _headers(),
       body: jsonEncode({
@@ -196,9 +209,9 @@ class ApiService {
       }),
     );
     if (res.statusCode == 201) {
-      return Address.fromJson(jsonDecode(res.body));
+      return Address.fromJson(_decode(res));
     }
-    throw Exception('Failed to save address');
+    _fail(res);
   }
 
   // --- PRICING QUOTE ---
@@ -207,16 +220,15 @@ class ApiService {
     required String serviceId,
     bool isEmergency = false,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/pricing/quote'),
       headers: _headers(),
       body: jsonEncode({'service_id': serviceId, 'is_emergency': isEmergency}),
     );
     if (res.statusCode == 200) {
-      return PriceQuote.fromJson(jsonDecode(res.body));
+      return PriceQuote.fromJson(_decode(res));
     }
-    final body = jsonDecode(res.body);
-    throw Exception(body['detail'] ?? 'Failed to calculate quote');
+    _fail(res);
   }
 
   // --- BOOKINGS ---
@@ -227,7 +239,7 @@ class ApiService {
     required String addressId,
     String? customerNotes,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings'),
       headers: _headers(),
       body: jsonEncode({
@@ -238,70 +250,67 @@ class ApiService {
       }),
     );
     if (res.statusCode == 201) {
-      return Booking.fromJson(jsonDecode(res.body));
+      return Booking.fromJson(_decode(res));
     }
-    final body = jsonDecode(res.body);
-    throw Exception(body['detail'] ?? 'Failed to create booking');
+    _fail(res);
   }
 
   Future<Booking> dispatchBooking(String bookingId) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings/$bookingId/dispatch'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return Booking.fromJson(jsonDecode(res.body));
+      return Booking.fromJson(_decode(res));
     }
-    throw Exception('Failed to dispatch booking');
+    _fail(res);
   }
 
   Future<Booking> getBooking(String bookingId) async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/bookings/$bookingId'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return Booking.fromJson(jsonDecode(res.body));
+      return Booking.fromJson(_decode(res));
     }
-    throw Exception('Failed to fetch booking');
+    _fail(res);
   }
 
   Future<List<Booking>> getMyBookings() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/bookings'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => Booking.fromJson(e)).toList();
     }
-    throw Exception('Failed to fetch bookings');
+    _fail(res);
   }
 
   Future<Booking> cancelBooking(String bookingId, String reason) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings/$bookingId/cancel'),
       headers: _headers(),
       body: jsonEncode({'cancellation_reason': reason}),
     );
     if (res.statusCode == 200) {
-      return Booking.fromJson(jsonDecode(res.body));
+      return Booking.fromJson(_decode(res));
     }
-    final body = jsonDecode(res.body);
-    throw Exception(body['detail'] ?? 'Failed to cancel booking');
+    _fail(res);
   }
 
   // --- PAYMENTS & RATINGS ---
 
   Future<void> initiatePayment(String bookingId, String method) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/payments'),
       headers: _headers(),
       body: jsonEncode({'booking_id': bookingId, 'payment_method': method}),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Failed to initialize payment');
+      _fail(res);
     }
   }
 
@@ -310,7 +319,7 @@ class ApiService {
     required int score,
     String? reviewText,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/ratings'),
       headers: _headers(),
       body: jsonEncode({
@@ -320,8 +329,7 @@ class ApiService {
       }),
     );
     if (res.statusCode != 201) {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Failed to submit review');
+      _fail(res);
     }
   }
 }

@@ -1,10 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:haazir_partner/core/theme.dart';
+import 'package:haazir_partner/core/api_response.dart';
 import 'package:haazir_partner/models/models.dart';
 import 'package:haazir_partner/screens/login_screen.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
+  test('Accept conflict is translated into a useful partner message', () {
+    final response = http.Response(
+      'Internal Server Error',
+      409,
+      headers: {'content-type': 'text/plain'},
+    );
+
+    expect(
+      () => decodeApiResponse(response, successStatuses: const {200}),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.message,
+          'message',
+          'This request was accepted by another professional.',
+        ),
+      ),
+    );
+  });
+
   test('Partner models serialization unit test', () {
     final stats = DashboardStats.fromJson({
       'is_online': true,

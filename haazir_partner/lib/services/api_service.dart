@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants.dart';
+import '../core/api_response.dart';
 import '../models/models.dart';
 
 class PartnerApiService {
@@ -43,6 +44,29 @@ class PartnerApiService {
     return headers;
   }
 
+  Future<http.Response> _get(Uri uri, {required Map<String, String> headers}) =>
+      apiRequest(http.get(uri, headers: headers));
+
+  Future<http.Response> _post(
+    Uri uri, {
+    required Map<String, String> headers,
+    Object? body,
+  }) => apiRequest(http.post(uri, headers: headers, body: body));
+
+  Future<http.Response> _patch(
+    Uri uri, {
+    required Map<String, String> headers,
+    Object? body,
+  }) => apiRequest(http.patch(uri, headers: headers, body: body));
+
+  dynamic _decode(http.Response response) =>
+      decodeApiResponse(response, successStatuses: const {200, 201, 204});
+
+  Never _fail(http.Response response) {
+    decodeApiResponse(response, successStatuses: const {});
+    throw const ApiException('Something went wrong. Please try again.');
+  }
+
   // --- AUTHENTICATION ---
 
   Future<ProviderUser> register({
@@ -51,7 +75,7 @@ class PartnerApiService {
     required String fullName,
     String? email,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/auth/register'),
       headers: _headers(requiresAuth: false),
       body: jsonEncode({
@@ -66,8 +90,7 @@ class PartnerApiService {
     if (res.statusCode == 201) {
       return await login(phone: phone, password: password);
     } else {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Provider registration failed');
+      _fail(res);
     }
   }
 
@@ -75,14 +98,14 @@ class PartnerApiService {
     required String phone,
     required String password,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/auth/login'),
       headers: _headers(requiresAuth: false),
       body: jsonEncode({'phone': phone, 'password': password}),
     );
 
     if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+      final data = _decode(res);
       _accessToken = data['access_token'];
       final prefs = await SharedPreferences.getInstance();
       await _secureStorage.write(
@@ -109,31 +132,27 @@ class PartnerApiService {
 
       return user;
     } else {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Login failed');
+      _fail(res);
     }
   }
 
   Future<ProviderUser> getProfile() async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl/auth/me'),
-      headers: _headers(),
-    );
+    final res = await _get(Uri.parse('$_baseUrl/auth/me'), headers: _headers());
     if (res.statusCode == 200) {
-      return ProviderUser.fromJson(jsonDecode(res.body));
+      return ProviderUser.fromJson(_decode(res));
     }
-    throw Exception('Failed to load profile');
+    _fail(res);
   }
 
   Future<ProviderProfile> getProviderProfile() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/providers/me'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return ProviderProfile.fromJson(jsonDecode(res.body));
+      return ProviderProfile.fromJson(_decode(res));
     }
-    throw Exception('Failed to load provider profile');
+    _fail(res);
   }
 
   Future<void> logout() async {
@@ -152,27 +171,27 @@ class PartnerApiService {
   // --- DASHBOARD & AVAILABILITY ---
 
   Future<DashboardStats> getDashboardStats() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/providers/me/dashboard-stats'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return DashboardStats.fromJson(jsonDecode(res.body));
+      return DashboardStats.fromJson(_decode(res));
     }
-    throw Exception('Failed to load dashboard stats');
+    _fail(res);
   }
 
   Future<void> updatePresence({
     required bool isOnline,
     required bool isAvailable,
   }) async {
-    final res = await http.patch(
+    final res = await _patch(
       Uri.parse('$_baseUrl/providers/me/status'),
       headers: _headers(),
       body: jsonEncode({'is_online': isOnline, 'is_available': isAvailable}),
     );
     if (res.statusCode != 200) {
-      throw Exception('Failed to update presence state');
+      _fail(res);
     }
   }
 
@@ -181,7 +200,7 @@ class PartnerApiService {
     required double longitude,
     required String presenceStatus,
   }) async {
-    await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/providers/me/location'),
       headers: _headers(),
       body: jsonEncode({
@@ -190,53 +209,53 @@ class PartnerApiService {
         'presence_status': presenceStatus,
       }),
     );
+    _decode(res);
   }
 
   // --- OFFERS & ACTIVE JOBS ---
 
   Future<List<IncomingOffer>> getIncomingOffers() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/providers/me/incoming-offers'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => IncomingOffer.fromJson(e)).toList();
     }
-    throw Exception('Failed to load incoming offers');
+    _fail(res);
   }
 
   Future<PartnerBooking> acceptBooking(String bookingId) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings/$bookingId/accept'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return PartnerBooking.fromJson(jsonDecode(res.body));
+      return PartnerBooking.fromJson(_decode(res));
     }
-    final body = jsonDecode(res.body);
-    throw Exception(body['detail'] ?? 'Failed to accept booking');
+    _fail(res);
   }
 
   Future<void> rejectBooking(String bookingId) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings/$bookingId/reject'),
       headers: _headers(),
     );
     if (res.statusCode != 200) {
-      throw Exception('Failed to reject offer');
+      _fail(res);
     }
   }
 
   Future<PartnerBooking> getBooking(String bookingId) async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/bookings/$bookingId'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      return PartnerBooking.fromJson(jsonDecode(res.body));
+      return PartnerBooking.fromJson(_decode(res));
     }
-    throw Exception('Failed to load booking');
+    _fail(res);
   }
 
   Future<PartnerBooking> updateBookingStatus({
@@ -244,39 +263,37 @@ class PartnerApiService {
     required String toStatus,
     String? reason,
   }) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/bookings/$bookingId/status'),
       headers: _headers(),
       body: jsonEncode({'to_status': toStatus, 'reason': reason}),
     );
     if (res.statusCode == 200) {
-      return PartnerBooking.fromJson(jsonDecode(res.body));
+      return PartnerBooking.fromJson(_decode(res));
     }
-    final body = jsonDecode(res.body);
-    throw Exception(body['detail'] ?? 'Failed to update job status');
+    _fail(res);
   }
 
   Future<void> collectCashPayment(String paymentId) async {
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('$_baseUrl/payments/$paymentId/complete'),
       headers: _headers(),
       body: jsonEncode({}),
     );
     if (res.statusCode != 200) {
-      final body = jsonDecode(res.body);
-      throw Exception(body['detail'] ?? 'Failed to confirm cash collection');
+      _fail(res);
     }
   }
 
   Future<List<PartnerBooking>> getPartnerBookingHistory() async {
-    final res = await http.get(
+    final res = await _get(
       Uri.parse('$_baseUrl/bookings'),
       headers: _headers(),
     );
     if (res.statusCode == 200) {
-      final List list = jsonDecode(res.body);
+      final List list = _decode(res);
       return list.map((e) => PartnerBooking.fromJson(e)).toList();
     }
-    throw Exception('Failed to load partner job history');
+    _fail(res);
   }
 }

@@ -1,3 +1,5 @@
+import os
+
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models import (
@@ -114,14 +116,23 @@ def seed_database():
                     )
                     db.add(service)
 
-        print("🌱 Seeding Admin Account...")
-        admin = db.query(User).filter(User.phone == "+919999999999").first()
-        if not admin:
+        admin_password = os.getenv("HAAZIR_BOOTSTRAP_ADMIN_PASSWORD")
+        admin_phone = os.getenv("HAAZIR_BOOTSTRAP_ADMIN_PHONE")
+        admin_email = os.getenv("HAAZIR_BOOTSTRAP_ADMIN_EMAIL")
+        if admin_password and admin_phone:
+            if len(admin_password) < 12:
+                raise ValueError("Bootstrap admin password must be at least 12 characters")
+            print("🌱 Provisioning configured bootstrap admin account...")
+            admin = db.query(User).filter(User.phone == admin_phone).first()
+        else:
+            admin = None
+            print("ℹ️  Admin bootstrap skipped; provision securely out of band.")
+        if admin_password and admin_phone and not admin:
             admin = User(
-                phone="+919999999999",
-                email="admin@haazir.app",
+                phone=admin_phone,
+                email=admin_email,
                 full_name="Haazir Platform Admin",
-                hashed_password=get_password_hash("AdminPass123!"),
+                hashed_password=get_password_hash(admin_password),
                 role=UserRole.ADMIN,
                 is_active=True,
                 is_suspended=False

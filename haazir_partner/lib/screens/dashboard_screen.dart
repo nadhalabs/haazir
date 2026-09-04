@@ -16,12 +16,14 @@ class PartnerDashboardScreen extends StatefulWidget {
 
 class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   DashboardStats? _stats;
+  ProviderProfile? _profile;
   List<IncomingOffer> _offers = [];
   Timer? _refreshTimer;
   Timer? _locationTimer;
 
   bool _isLoading = true;
   bool _isOnline = false;
+  bool _isChangingStatus = false;
   String? _errorMessage;
 
   @override
@@ -60,11 +62,13 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   Future<void> _loadDashboard() async {
     setState(() => _isLoading = true);
     try {
+      final profile = await PartnerApiService().getProviderProfile();
       final stats = await PartnerApiService().getDashboardStats();
       final offers = await PartnerApiService().getIncomingOffers();
       if (mounted) {
         setState(() {
           _stats = stats;
+          _profile = profile;
           _isOnline = stats.isOnline;
           _offers = offers;
           _isLoading = false;
@@ -117,23 +121,45 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   }
 
   Future<void> _toggleOnlineStatus(bool value) async {
-    setState(() => _isOnline = value);
+    if (_isChangingStatus) return;
+    final profile = _profile;
+    if (value && profile?.verificationStatus != 'VERIFIED') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can go online after your profile is verified.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _isChangingStatus = true);
     try {
+      if (value) {
+        setState(() => _isOnline = true);
+        await _sendHeartbeatIfOnline();
+      }
       await PartnerApiService().updatePresence(
         isOnline: value,
         isAvailable: value,
       );
-      if (value) {
-        await _sendHeartbeatIfOnline();
-      }
-      _loadDashboard();
+      if (mounted) setState(() => _isOnline = value);
+      await _loadDashboard();
     } catch (e) {
+      if (value) {
+        try {
+          await PartnerApiService().updatePresence(
+            isOnline: false,
+            isAvailable: false,
+          );
+        } catch (_) {}
+      }
       if (mounted) {
-        setState(() => _isOnline = !value);
+        setState(() => _isOnline = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to change status: $e')));
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
+    } finally {
+      if (mounted) setState(() => _isChangingStatus = false);
     }
   }
 
@@ -330,7 +356,7 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
               value: _isOnline,
               activeTrackColor: PartnerTheme.onlineGreen.withValues(alpha: 0.5),
               activeThumbColor: PartnerTheme.onlineGreen,
-              onChanged: _toggleOnlineStatus,
+              onChanged: _isChangingStatus ? null : _toggleOnlineStatus,
             ),
           ],
         ),
@@ -586,25 +612,48 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   }
 
   Widget _buildVerificationCard() {
+    final status = _profile?.verificationStatus ?? 'PENDING';
+    final (label, message, color, icon) = switch (status) {
+      'VERIFIED' => (
+        'Verified',
+        'Your profile is verified and ready to receive jobs.',
+        PartnerTheme.onlineGreen,
+        Icons.check_circle_rounded,
+      ),
+      'REJECTED' => (
+        'Verification rejected',
+        'Review your profile details or contact support before going online.',
+        PartnerTheme.offlineRed,
+        Icons.cancel_rounded,
+      ),
+      'SUSPENDED' => (
+        'Account suspended',
+        'Your account cannot receive jobs. Contact support for assistance.',
+        PartnerTheme.offlineRed,
+        Icons.block_rounded,
+      ),
+      _ => (
+        'Pending verification',
+        'Your profile is under review. You’ll be able to receive jobs after verification.',
+        PartnerTheme.busyAmber,
+        Icons.schedule_rounded,
+      ),
+    };
     return Card(
       child: ListTile(
-        leading: const Icon(
-          Icons.shield_rounded,
-          color: PartnerTheme.accent,
-          size: 28,
-        ),
+        leading: Icon(Icons.shield_rounded, color: color, size: 28),
         title: const Text(
           'Partner Verification',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
-        subtitle: const Text(
-          'Admin Verified • Active V1 Service Professional',
-          style: TextStyle(fontSize: 12, color: PartnerTheme.textSecondary),
+        subtitle: Text(
+          '$label\n$message',
+          style: const TextStyle(
+            fontSize: 12,
+            color: PartnerTheme.textSecondary,
+          ),
         ),
-        trailing: const Icon(
-          Icons.check_circle_rounded,
-          color: PartnerTheme.onlineGreen,
-        ),
+        trailing: Icon(icon, color: color),
       ),
     );
   }

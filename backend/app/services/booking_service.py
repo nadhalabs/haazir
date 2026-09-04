@@ -15,6 +15,7 @@ from app.models.enums import (
     AssignmentStatus,
     UserRole,
     PaymentStatus,
+    PaymentMethod,
     ProviderPresenceStatus
 )
 from app.models.user import User
@@ -22,8 +23,10 @@ from app.models.address import Address
 from app.models.provider import ProviderProfile
 from app.models.service import Service
 from app.models.pricing import PriceQuote
+from app.models.payment import Payment
 from app.services.pricing_service import PricingService
 from app.core.redis import redis_service
+from app.services.adapters.payment_adapter import CashPaymentAdapter
 import uuid
 import random
 
@@ -126,6 +129,23 @@ class BookingService:
             metadata_json={"quote_id": str(quote.id)}
         )
         db.add(history)
+
+        # Cash is the only V1 payment method shown by the customer app. Create
+        # its pending record with the booking so the assigned provider always
+        # has an authoritative payment to confirm after completion.
+        payment_result = CashPaymentAdapter().initiate_payment(
+            amount=quote.total_amount,
+            currency=quote.currency,
+            booking_id=booking.id,
+        )
+        db.add(Payment(
+            booking_id=booking.id,
+            amount=quote.total_amount,
+            currency=quote.currency,
+            payment_method=PaymentMethod.CASH,
+            status=payment_result["status"],
+            transaction_reference=payment_result["transaction_reference"],
+        ))
         db.commit()
         db.refresh(booking)
         return booking

@@ -1,10 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:haazir_customer/core/theme.dart';
+import 'package:haazir_customer/core/api_response.dart';
 import 'package:haazir_customer/models/models.dart';
 import 'package:haazir_customer/screens/login_screen.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
+  test('Plain-text server failure becomes a safe customer message', () {
+    final response = http.Response(
+      'Internal Server Error',
+      500,
+      headers: {'content-type': 'text/plain; charset=utf-8'},
+    );
+
+    expect(
+      () => decodeApiResponse(response, successStatuses: const {200}),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.message,
+          'message',
+          'Something went wrong on our side. Please try again.',
+        ),
+      ),
+    );
+  });
+
+  test('FastAPI validation details are mapped without exposing types', () {
+    final response = http.Response(
+      '{"detail":[{"msg":"Phone number is invalid"}]}',
+      422,
+      headers: {'content-type': 'application/json'},
+    );
+
+    expect(
+      () => decodeApiResponse(response, successStatuses: const {200}),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.message,
+          'message',
+          'Phone number is invalid',
+        ),
+      ),
+    );
+  });
+
   test('Models serialization unit test', () {
     final user = User.fromJson({
       'id': 'u1',
