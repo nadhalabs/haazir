@@ -142,14 +142,21 @@ def seed_database():
             if not admin:
                 admin = User(full_name="Haazir Platform Admin")
                 db.add(admin)
+                bootstrap_action = "created"
+            else:
+                bootstrap_action = "updated"
             admin.phone = admin_phone
             admin.email = admin_email
             admin.hashed_password = get_password_hash(admin_password)
             admin.role = UserRole.ADMIN
             admin.is_active = True
             admin.is_suspended = False
+        else:
+            bootstrap_action = None
 
         db.commit()
+        if bootstrap_action:
+            print(f"✅ Bootstrap admin {bootstrap_action}")
         print("✅ Database successfully seeded!")
     finally:
         db.close()
