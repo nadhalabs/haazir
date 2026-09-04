@@ -1,5 +1,7 @@
 import os
 
+from sqlalchemy import or_
+
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models import (
@@ -123,21 +125,29 @@ def seed_database():
             if len(admin_password) < 12:
                 raise ValueError("Bootstrap admin password must be at least 12 characters")
             print("🌱 Provisioning configured bootstrap admin account...")
-            admin = db.query(User).filter(User.phone == admin_phone).first()
+            identity_filters = [User.phone == admin_phone]
+            if admin_email:
+                identity_filters.append(User.email == admin_email)
+            matching_admins = db.query(User).filter(or_(*identity_filters)).all()
+            if len(matching_admins) > 1:
+                raise ValueError(
+                    "Bootstrap admin email and phone belong to different accounts; "
+                    "resolve the conflict before provisioning"
+                )
+            admin = matching_admins[0] if matching_admins else None
         else:
             admin = None
             print("ℹ️  Admin bootstrap skipped; provision securely out of band.")
-        if admin_password and admin_phone and not admin:
-            admin = User(
-                phone=admin_phone,
-                email=admin_email,
-                full_name="Haazir Platform Admin",
-                hashed_password=get_password_hash(admin_password),
-                role=UserRole.ADMIN,
-                is_active=True,
-                is_suspended=False
-            )
-            db.add(admin)
+        if admin_password and admin_phone:
+            if not admin:
+                admin = User(full_name="Haazir Platform Admin")
+                db.add(admin)
+            admin.phone = admin_phone
+            admin.email = admin_email
+            admin.hashed_password = get_password_hash(admin_password)
+            admin.role = UserRole.ADMIN
+            admin.is_active = True
+            admin.is_suspended = False
 
         db.commit()
         print("✅ Database successfully seeded!")
