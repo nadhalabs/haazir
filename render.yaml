@@ -4,7 +4,7 @@ services:
     runtime: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    preDeployCommand: alembic upgrade head
+    preDeployCommand: alembic upgrade head && python -m app.seed
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
@@ -21,6 +21,12 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
+        sync: false
+      - key: HAAZIR_BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: HAAZIR_BOOTSTRAP_ADMIN_PHONE
+        sync: false
+      - key: HAAZIR_BOOTSTRAP_ADMIN_PASSWORD
         sync: false
 
   - type: keyvalue
